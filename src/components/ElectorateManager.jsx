@@ -1,0 +1,384 @@
+import React, { useState } from 'react';
+import { Plus, Edit2, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { api } from '../services/api';
+import { ConfirmModal, AlertModal } from './Modal';
+import { useModal } from '../hooks/useModal';
+
+export const ElectorateManager = ({ electorates, onUpdate }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [formData, setFormData] = useState({
+    student_id: '',
+    program: '',
+    year_level: 100,
+    phone_number: '',
+    email: '',
+  });
+
+  const confirmModal = useModal();
+  const alertModal = useModal();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingId) {
+        await api.updateElectorate(editingId, formData);
+      } else {
+        await api.createElectorate(formData);
+      }
+      resetForm();
+      onUpdate();
+      
+      await alertModal.showAlert({
+        title: 'Success!',
+        message: `Voter ${editingId ? 'updated' : 'created'} successfully`,
+        type: 'success'
+      });
+    } catch (err) {
+      await alertModal.showAlert({
+        title: 'Operation Failed',
+        message: err.message,
+        type: 'error'
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFormData({ 
+      student_id: '', 
+      program: '', 
+      year_level: 100,
+      phone_number: '',
+      email: '',
+    });
+  };
+
+  const handleEdit = (electorate) => {
+    setFormData({
+      student_id: electorate.student_id,
+      program: electorate.program || '',
+      year_level: electorate.year_level || 100,
+      phone_number: electorate.phone_number || '',
+      email: electorate.email || '',
+    });
+    setEditingId(electorate.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    const confirmed = await confirmModal.showConfirm({
+      title: 'Delete Voter',
+      message: 'Are you sure you want to delete this voter? This action cannot be undone.',
+      type: 'danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await api.deleteElectorate(id);
+      onUpdate();
+      await alertModal.showAlert({
+        title: 'Deleted!',
+        message: 'Voter deleted successfully',
+        type: 'success'
+      });
+    } catch (err) {
+      await alertModal.showAlert({
+        title: 'Delete Failed',
+        message: err.message,
+        type: 'error'
+      });
+    }
+  };
+
+  const handleExcelUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type - accept Excel AND CSV files
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
+      await alertModal.showAlert({
+        title: 'Invalid File Type',
+        message: 'Please select an Excel or CSV file (.xlsx, .xls, or .csv)',
+        type: 'error'
+      });
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      await alertModal.showAlert({
+        title: 'File Too Large',
+        message: 'File size must be less than 10MB',
+        type: 'error'
+      });
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setUploadResult(null);
+
+      const result = await api.bulkUploadElectorates(file);
+      
+      setUploadResult({
+        success: true,
+        count: result.length,
+        message: `Successfully uploaded ${result.length} voters!`
+      });
+      
+      onUpdate();
+      
+      // Clear file input
+      e.target.value = '';
+
+      await alertModal.showAlert({
+        title: 'Upload Successful!',
+        message: `Successfully uploaded ${result.length} voters!`,
+        type: 'success'
+      });
+    } catch (err) {
+      setUploadResult({
+        success: false,
+        message: 'Upload failed: ' + err.message
+      });
+
+      await alertModal.showAlert({
+        title: 'Upload Failed',
+        message: err.message,
+        type: 'error'
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    // Create CSV template
+    const headers = ['student_id', 'program', 'year_level', 'phone_number', 'email'];
+    const sample = ['2024001', 'Computer Science', '300', '0244123456', 'student@example.com'];
+    
+    const csvContent = [
+      headers.join(','),
+      sample.join(','),
+      // Add a few empty rows for users to fill
+      ',,,,'
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'voters_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <>
+      <ConfirmModal {...confirmModal} onConfirm={confirmModal.handleConfirm} onClose={confirmModal.handleClose} {...confirmModal.modalProps} />
+      <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Voters (Electorates)</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={downloadTemplate}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              title="Download Excel Template"
+            >
+              <Download className="h-5 w-5" />
+              Template
+            </button>
+            
+            <label className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 cursor-pointer">
+              <Upload className="h-5 w-5" />
+              {uploading ? 'Uploading...' : 'Bulk Upload'}
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleExcelUpload}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
+
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <Plus className="h-5 w-5" />
+              Add Voter
+            </button>
+          </div>
+        </div>
+
+        {/* Upload Result Alert */}
+        {uploadResult && (
+          <div className={`mb-6 p-4 rounded-lg ${
+            uploadResult.success 
+              ? 'bg-green-50 border border-green-200 text-green-800' 
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                <span>{uploadResult.message}</span>
+              </div>
+              <button
+                onClick={() => setUploadResult(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Form */}
+        {showForm && (
+          <form onSubmit={handleSubmit} className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Student ID *</label>
+                <input
+                  type="text"
+                  value={formData.student_id}
+                  onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Program</label>
+                <input
+                  type="text"
+                  value={formData.program}
+                  onChange={(e) => setFormData({ ...formData, program: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Year Level</label>
+                <select
+                  value={formData.year_level}
+                  onChange={(e) => setFormData({ ...formData, year_level: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={300}>300</option>
+                  <option value={400}>400</option>
+                  <option value={500}>500</option>
+                  <option value={600}>600</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                <input
+                  type="tel"
+                  value={formData.phone_number}
+                  onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  placeholder="0244123456"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  placeholder="student@example.com"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button 
+                type="submit" 
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                {editingId ? 'Update' : 'Create'}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {electorates.map((electorate) => (
+                <tr key={electorate.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {electorate.student_id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {electorate.program || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {electorate.year_level || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {electorate.phone_number || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {electorate.email || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(electorate)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(electorate.id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {electorates.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <p>No voters found. Add voters individually or upload in bulk.</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
