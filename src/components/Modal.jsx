@@ -1,4 +1,3 @@
-import React from 'react';
 import { AlertCircle, CheckCircle, X, AlertTriangle } from 'lucide-react';
 
 export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'warning' }) => {

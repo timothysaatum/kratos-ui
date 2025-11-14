@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Edit2, Trash2, Upload, X } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Users, BarChart3, FileText, UserCheck } from 'lucide-react';
 
 export const Dashboard = ({ stats, onRefresh }) => (

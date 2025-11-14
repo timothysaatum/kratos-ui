@@ -1,4 +1,3 @@
-import React from 'react';
 import { Trophy, TrendingUp } from 'lucide-react';
 
 export const ResultsView = ({ results }) => {

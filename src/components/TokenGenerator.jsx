@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Send, Key, RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
