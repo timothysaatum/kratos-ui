@@ -1,21 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
-import { LogOut, RefreshCw } from 'lucide-react';
-import { api } from '../services/api';
-import { AlertModal } from '../components/Modal';
-import { useModal } from '../hooks/useModal';
-import { Login } from '../components/Login';
-import { Dashboard } from '../components/Dashboard';
-import { PortfolioManager } from '../components/PortfolioManager';
-import { CandidateManager } from '../components/CandidateManager';
-import { ElectorateManager } from '../components/ElectorateManager';
-import { ResultsView } from '../components/ResultsView';
-import { TokenGenerator } from '../components/TokenGenerator';
+import { useState, useEffect, useCallback } from "react";
+import { LogOut, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../services/api";
+import { AlertModal } from "../components/Modal";
+import { useModal } from "../hooks/useModal";
+import { Login } from "../components/Login";
+import { Dashboard } from "../components/Dashboard";
+import { PortfolioManager } from "../components/PortfolioManager";
+import { CandidateManager } from "../components/CandidateManager";
+import { ElectorateManager } from "../components/ElectorateManager";
+import { ResultsView } from "../components/ResultsView";
+import { TokenGenerator } from "../components/TokenGenerator";
 
 const Admin = () => {
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminData, setAdminData] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Data states
   const [stats, setStats] = useState(null);
@@ -24,33 +27,50 @@ const Admin = () => {
   const [electorates, setElectorates] = useState([]);
   const [results, setResults] = useState([]);
 
-  // Modal hook
   const alertModal = useModal();
 
   const checkAuth = useCallback(async () => {
-    const token = localStorage.getItem('admin_token');
-    if (token) {
-      try {
-        const data = await api.verify();
+    const token = localStorage.getItem("admin_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await api.verify();
+
+      console.log("Admin page - User data:", data);
+
+      // Only allow admin role - redirect others
+      if (data.role === "admin") {
         setAdminData(data);
         setIsAuthenticated(true);
         await loadData();
-      } catch (err) {
-        // Try to refresh token
-        try {
-          await api.refreshToken();
-          const data = await api.verify();
-          setAdminData(data);
-          setIsAuthenticated(true);
-          await loadData();
-        } catch (refreshErr) {
-          localStorage.removeItem('admin_token');
-          setIsAuthenticated(false);
-        }
+      } else {
+        // Redirect to appropriate page based on role
+        const correctRoute = api.getRoleBasedRoute(data.role);
+        localStorage.removeItem("admin_token");
+        await alertModal.showAlert({
+          title: "Access Denied",
+          message: `This page is for admins only. Redirecting to ${data.role} portal...`,
+          type: "error",
+        });
+        setTimeout(() => navigate(correctRoute), 2000);
+        return;
       }
+    } catch (err) {
+      console.error("Auth verification failed:", err);
+      localStorage.removeItem("admin_token");
+      setIsAuthenticated(false);
+      await alertModal.showAlert({
+        title: "Access Denied",
+        message: err.message || "You don't have permission to access the admin panel",
+        type: "error",
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  }, [alertModal, navigate]);
 
   useEffect(() => {
     checkAuth();
@@ -58,59 +78,97 @@ const Admin = () => {
 
   const loadData = async () => {
     try {
-      const [statsData, portfoliosData, candidatesData, electoratesData, resultsData] = await Promise.all([
-        api.getStatistics(),
-        api.getPortfolios(),
-        api.getCandidates(),
-        api.getElectorates(),
-        api.getResults(),
+      const [
+        statsData,
+        portfoliosData,
+        candidatesData,
+        electoratesData,
+        resultsData,
+      ] = await Promise.all([
+        api.getStatistics().catch(() => null),
+        api.getPortfolios().catch(() => []),
+        api.getCandidates().catch(() => []),
+        api.getElectorates(0, 1000).catch(() => []),
+        api.getResults().catch(() => []),
       ]);
+
       setStats(statsData);
-      setPortfolios(portfoliosData);
-      setCandidates(candidatesData);
-      setElectorates(electoratesData);
-      setResults(resultsData);
+      setPortfolios(portfoliosData || []);
+      setCandidates(candidatesData || []);
+      setElectorates(electoratesData || []);
+      setResults(resultsData || []);
     } catch (err) {
+      console.error("Failed to load data:", err);
       await alertModal.showAlert({
-        title: 'Error',
-        message: 'Failed to load data: ' + err.message,
-        type: 'error'
+        title: "Error",
+        message: "Failed to load some data. Please try refreshing.",
+        type: "error",
       });
     }
   };
 
   const handleLogin = async (data) => {
-    setAdminData(data);
-    setIsAuthenticated(true);
-    await loadData();
-    await alertModal.showAlert({
-      title: 'Success!',
-      message: 'Login successful!',
-      type: 'success'
-    });
+    console.log("Login response:", data);
+
+    // Verify role access after login
+    if (data.role === "admin") {
+      setAdminData(data);
+      setIsAuthenticated(true);
+      setLoading(true);
+      try {
+        await loadData();
+        await alertModal.showAlert({
+          title: "Success!",
+          message: "Login successful!",
+          type: "success",
+        });
+      } catch (err) {
+        console.error("Post-login data load failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Redirect to correct portal
+      const correctRoute = api.getRoleBasedRoute(data.role);
+      await alertModal.showAlert({
+        title: "Wrong Portal",
+        message: `You are logged in as ${data.role}. Redirecting to your portal...`,
+        type: "info",
+      });
+      setTimeout(() => navigate(correctRoute), 2000);
+      localStorage.removeItem("admin_token");
+    }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('admin_token');
+    localStorage.removeItem("admin_token");
     setIsAuthenticated(false);
     setAdminData(null);
-    setActiveTab('dashboard');
+    setActiveTab("dashboard");
+    setStats(null);
+    setPortfolios([]);
+    setCandidates([]);
+    setElectorates([]);
+    setResults([]);
   };
 
   const refreshData = async () => {
+    setRefreshing(true);
     try {
       await loadData();
       await alertModal.showAlert({
-        title: 'Success!',
-        message: 'Data refreshed successfully!',
-        type: 'success'
+        title: "Success!",
+        message: "Data refreshed successfully!",
+        type: "success",
       });
     } catch (err) {
       await alertModal.showAlert({
-        title: 'Error',
-        message: 'Failed to refresh data: ' + err.message,
-        type: 'error'
+        title: "Error",
+        message: "Failed to refresh data: " + err.message,
+        type: "error",
       });
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -128,7 +186,11 @@ const Admin = () => {
   if (!isAuthenticated) {
     return (
       <>
-        <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
+        <AlertModal
+          {...alertModal}
+          onClose={alertModal.handleClose}
+          {...alertModal.modalProps}
+        />
         <Login onLogin={handleLogin} />
       </>
     );
@@ -136,23 +198,32 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
+      <AlertModal
+        {...alertModal}
+        onClose={alertModal.handleClose}
+        {...alertModal.modalProps}
+      />
 
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Kratos Admin</h1>
-              <p className="text-sm text-gray-600">Welcome, {adminData?.username}</p>
+              <p className="text-sm text-gray-600">
+                Welcome, {adminData?.username} <span className="text-blue-600 font-medium">(Admin)</span>
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <button
                 onClick={refreshData}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                disabled={refreshing}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
                 title="Refresh Data"
               >
-                <RefreshCw className="h-5 w-5" />
+                <RefreshCw
+                  className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`}
+                />
               </button>
               <button
                 onClick={handleLogout}
@@ -167,17 +238,24 @@ const Admin = () => {
       </header>
 
       {/* Navigation */}
-      <nav className="bg-white shadow-sm border-t border-gray-200">
+      <nav className="bg-white shadow-sm border-t border-gray-200 sticky top-[73px] z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            {['dashboard', 'portfolios', 'candidates', 'voters', 'tokens', 'results'].map((tab) => (
+          <div className="flex space-x-8 overflow-x-auto">
+            {[
+              "dashboard",
+              "portfolios",
+              "candidates",
+              "voters",
+              "tokens",
+              "results",
+            ].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors ${
+                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors whitespace-nowrap ${
                   activeTab === tab
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
                 {tab}
@@ -189,19 +267,37 @@ const Admin = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && <Dashboard stats={stats} onRefresh={refreshData} />}
-        {activeTab === 'portfolios' && <PortfolioManager portfolios={portfolios} onUpdate={refreshData} />}
-        {activeTab === 'candidates' && <CandidateManager candidates={candidates} portfolios={portfolios} onUpdate={refreshData} />}
-        {activeTab === 'voters' && <ElectorateManager electorates={electorates} onUpdate={refreshData} />}
-        {activeTab === 'tokens' && <TokenGenerator electorates={electorates} onUpdate={refreshData} />}
-        {activeTab === 'results' && <ResultsView results={results} />}
+        {activeTab === "dashboard" && (
+          <Dashboard
+            stats={stats}
+            electorates={electorates}
+            onRefresh={refreshData}
+          />
+        )}
+        {activeTab === "portfolios" && (
+          <PortfolioManager portfolios={portfolios} onUpdate={refreshData} />
+        )}
+        {activeTab === "candidates" && (
+          <CandidateManager
+            candidates={candidates}
+            portfolios={portfolios}
+            onUpdate={refreshData}
+          />
+        )}
+        {activeTab === "voters" && (
+          <ElectorateManager electorates={electorates} onUpdate={refreshData} />
+        )}
+        {activeTab === "tokens" && (
+          <TokenGenerator electorates={electorates} onUpdate={refreshData} />
+        )}
+        {activeTab === "results" && <ResultsView results={results} />}
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-sm text-gray-500">
-            Election Management System © 2024
+            Election Management System © 2025
           </p>
         </div>
       </footer>
