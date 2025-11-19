@@ -1,5 +1,5 @@
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API_BASE_URL = "http://localhost:8000/api";
+  // process.env.REACT_APP_API_URL || "http://localhost:8000/api";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
@@ -10,7 +10,7 @@ class VotingApiService {
     this.tokenKey = "voting_token";
     this.voterDataKey = "voter_data";
     this.tokenExpiryKey = "token_expiry";
-    this.refreshPromise = null; // Prevent concurrent refresh requests
+    this.refreshPromise = null;
   }
 
   // Helper: Get stored token
@@ -21,7 +21,6 @@ class VotingApiService {
   // Helper: Set token with expiry tracking
   setToken(token, expiresIn = 600) {
     sessionStorage.setItem(this.tokenKey, token);
-    // Store when token expires (current time + expiresIn seconds)
     const expiryTime = Date.now() + expiresIn * 1000;
     sessionStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
   }
@@ -32,7 +31,7 @@ class VotingApiService {
     if (!expiryTime) return false;
 
     const timeUntilExpiry = parseInt(expiryTime) - Date.now();
-    return timeUntilExpiry < TOKEN_REFRESH_THRESHOLD;
+    return timeUntilExpiry > 0 && timeUntilExpiry < TOKEN_REFRESH_THRESHOLD;
   }
 
   // Helper: Check if token is expired
@@ -41,6 +40,11 @@ class VotingApiService {
     if (!expiryTime) return true;
 
     return Date.now() >= parseInt(expiryTime);
+  }
+
+  // Helper: Check if user has a token (logged in)
+  hasToken() {
+    return !!this.getToken();
   }
 
   // Helper: Clear token
@@ -54,7 +58,6 @@ class VotingApiService {
 
   // Helper: Refresh access token using refresh token cookie
   async refreshAccessToken() {
-    // Prevent multiple concurrent refresh requests
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
@@ -63,7 +66,7 @@ class VotingApiService {
       try {
         const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
           method: "POST",
-          credentials: "include", // Important: sends cookies
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },
@@ -74,8 +77,6 @@ class VotingApiService {
         }
 
         const data = await response.json();
-
-        // Store new access token
         this.setToken(data.access_token, data.expires_in);
 
         console.log("Access token refreshed successfully");
@@ -108,7 +109,31 @@ class VotingApiService {
 
   // Helper: Make authenticated request with auto-refresh
   async request(endpoint, options = {}) {
-    // Check if token needs refresh before making request
+    // DON'T try to refresh if we don't have a token yet
+    if (!this.hasToken()) {
+      // This is likely the initial login request, proceed normally
+      const headers = {
+        "Content-Type": "application/json",
+        ...options.headers,
+      };
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          error.detail || `Request failed with status ${response.status}`
+        );
+      }
+
+      return response.json();
+    }
+
+    // Check if token needs refresh (only if we have a token)
     if (this.needsRefresh() && !this.isTokenExpired()) {
       try {
         await this.refreshAccessToken();
@@ -139,15 +164,13 @@ class VotingApiService {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
-      credentials: "include", // Include cookies for CSRF and refresh token
+      credentials: "include",
     });
 
     // Handle token expiration - try to refresh once
     if (response.status === 401 && !options._isRetry) {
       try {
-        const newToken = await this.refreshAccessToken();
-
-        // Retry request with new token
+        await this.refreshAccessToken();
         return this.request(endpoint, { ...options, _isRetry: true });
       } catch (refreshError) {
         this.clearToken();
@@ -177,9 +200,6 @@ class VotingApiService {
 
   /**
    * Verify voting token
-   * @param {string} token - 8-character voting token
-   * @param {Object} options - Additional verification options
-   * @returns {Promise<Object>} Verification result with access token and voter data
    */
   async verifyToken(token, options = {}) {
     const cleanToken = token.replace(/[^A-Za-z0-9]/g, "");
@@ -205,7 +225,6 @@ class VotingApiService {
 
   /**
    * Get voting ballot for authenticated voter
-   * @returns {Promise<Array>} List of portfolios with candidates
    */
   async getBallot() {
     return this.retryRequest(() => this.request("/voting/ballot"));
@@ -213,15 +232,12 @@ class VotingApiService {
 
   /**
    * Cast votes for selected candidates
-   * @param {Array} votes - Array of {portfolio_id, candidate_id} objects
-   * @returns {Promise<Object>} Vote submission result
    */
   async castVote(votes) {
     if (!Array.isArray(votes) || votes.length === 0) {
       throw new Error("Votes must be a non-empty array");
     }
 
-    // Validate vote structure
     votes.forEach((vote) => {
       if (!vote.portfolio_id || !vote.candidate_id) {
         throw new Error("Each vote must have portfolio_id and candidate_id");
@@ -233,15 +249,12 @@ class VotingApiService {
       body: JSON.stringify({ votes }),
     });
 
-    // Clear tokens after successful vote
     this.clearToken();
-
     return result;
   }
 
   /**
    * Get votes cast by current voter
-   * @returns {Promise<Array>} List of votes
    */
   async getMyVotes() {
     return this.request("/voting/my-votes");
@@ -249,7 +262,6 @@ class VotingApiService {
 
   /**
    * Check if current session is valid
-   * @returns {Promise<boolean>} Session validity
    */
   async checkSession() {
     try {
@@ -262,7 +274,6 @@ class VotingApiService {
 
   /**
    * Get stored voter data
-   * @returns {Object|null} Voter data
    */
   getVoterData() {
     const data = sessionStorage.getItem(this.voterDataKey);
