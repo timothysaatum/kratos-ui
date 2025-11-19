@@ -1,6 +1,6 @@
 // const API_BASE_URL = "http://localhost:8000/api";
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
-
+const API_BASE_URL = "http://localhost:8000/api";
+// process.env.REACT_APP_API_URL || 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 const TOKEN_REFRESH_THRESHOLD = 2 * 60 * 1000; // Refresh if less than 2 minutes left
