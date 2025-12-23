@@ -23,14 +23,28 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        student_id: formData.student_id,
+        program: formData.program,
+        year_level: Number(formData.year_level),
+      };
+
+      if (formData.phone_number && formData.phone_number.trim() !== '') {
+        payload.phone_number = formData.phone_number;
+      }
+
+      if (formData.email && formData.email.trim() !== '') {
+        payload.email = formData.email;
+      }
+
       if (editingId) {
-        await api.updateElectorate(editingId, formData);
+        await api.updateElectorate(editingId, payload);
       } else {
-        await api.createElectorate(formData);
+        await api.createElectorate(payload);
       }
       resetForm();
       onUpdate();
-      
+
       await alertModal.showAlert({
         title: 'Success!',
         message: `Voter ${editingId ? 'updated' : 'created'} successfully`,
@@ -48,9 +62,9 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ 
-      student_id: '', 
-      program: '', 
+    setFormData({
+      student_id: '',
+      program: '',
       year_level: 100,
       phone_number: '',
       email: '',
@@ -124,15 +138,15 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
       setUploadResult(null);
 
       const result = await api.bulkUploadElectorates(file);
-      
+
       setUploadResult({
         success: true,
         count: result.length,
         message: `Successfully uploaded ${result.length} voters!`
       });
-      
+
       onUpdate();
-      
+
       // Clear file input
       e.target.value = '';
 
@@ -161,7 +175,7 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
     // Create CSV template
     const headers = ['student_id', 'program', 'year_level', 'phone_number', 'email'];
     const sample = ['2024001', 'Computer Science', '300', '0244123456', 'student@example.com'];
-    
+
     const csvContent = [
       headers.join(','),
       sample.join(','),
@@ -197,7 +211,7 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
               <Download className="h-5 w-5" />
               Template
             </button>
-            
+
             <label className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 cursor-pointer">
               <Upload className="h-5 w-5" />
               {uploading ? 'Uploading...' : 'Bulk Upload'}
@@ -222,11 +236,10 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
 
         {/* Upload Result Alert */}
         {uploadResult && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            uploadResult.success 
-              ? 'bg-green-50 border border-green-200 text-green-800' 
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
+          <div className={`mb-6 p-4 rounded-lg ${uploadResult.success
+            ? 'bg-green-50 border border-green-200 text-green-800'
+            : 'bg-red-50 border border-red-200 text-red-800'
+            }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5" />
@@ -257,20 +270,22 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Program</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Program *</label>
                 <input
                   type="text"
                   value={formData.program}
                   onChange={(e) => setFormData({ ...formData, program: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Year Level</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Year Level *</label>
                 <select
                   value={formData.year_level}
                   onChange={(e) => setFormData({ ...formData, year_level: parseInt(e.target.value) })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  required
                 >
                   <option value={100}>100</option>
                   <option value={200}>200</option>
@@ -302,8 +317,8 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
               >
                 {editingId ? 'Update' : 'Create'}
