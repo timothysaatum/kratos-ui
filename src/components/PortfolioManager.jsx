@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
 import { useModal } from '../hooks/useModal';
@@ -7,6 +7,7 @@ import { useModal } from '../hooks/useModal';
 export const PortfolioManager = ({ portfolios, onUpdate }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -17,6 +18,19 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+
+  const stats = useMemo(() => ({
+    total: portfolios.length,
+    active: portfolios.filter(p => p.is_active).length,
+    inactive: portfolios.filter(p => !p.is_active).length,
+    totalSlots: portfolios.reduce((sum, p) => sum + p.max_candidates, 0),
+  }), [portfolios]);
+
+  const filteredPortfolios = useMemo(() =>
+    portfolios.filter(p =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    ), [portfolios, searchTerm]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,14 +104,28 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
 
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Portfolios</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Portfolios</h2>
+            <p className="text-sm text-gray-600 mt-1">{stats.total} total • {stats.active} active • {stats.totalSlots} candidate slots</p>
+          </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="h-5 w-5" />
             Add Portfolio
           </button>
+        </div>
+
+        <div className="mb-6 relative">
+          <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search portfolios..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
 
         {showForm && (
@@ -170,8 +198,14 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
           </form>
         )}
 
+        {filteredPortfolios.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            <p>{searchTerm ? 'No portfolios match your search' : 'No portfolios yet'}</p>
+          </div>
+        )}
+
         <div className="space-y-4">
-          {portfolios.map((portfolio) => (
+          {filteredPortfolios.map((portfolio) => (
             <div key={portfolio.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start">
                 <div className="flex-1">

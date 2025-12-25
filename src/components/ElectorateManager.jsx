@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Edit2, Trash2, Upload, Download, FileSpreadsheet, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
 import { useModal } from '../hooks/useModal';
@@ -9,6 +9,8 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
   const [editingId, setEditingId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterProgram, setFilterProgram] = useState('');
   const [formData, setFormData] = useState({
     student_id: '',
     program: '',
@@ -19,6 +21,33 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+
+  const stats = useMemo(() => {
+    const programs = [...new Set(electorates.map(e => e.program).filter(Boolean))];
+    return {
+      total: electorates.length,
+      voted: electorates.filter(e => e.has_voted).length,
+      tokenized: electorates.filter(e => e.voting_token).length,
+      programs: programs.map(p => ({
+        name: p,
+        count: electorates.filter(e => e.program === p).length,
+        voted: electorates.filter(e => e.program === p && e.has_voted).length,
+      })),
+      yieldByYear: {
+        100: electorates.filter(e => e.year_level === 100).length,
+        200: electorates.filter(e => e.year_level === 200).length,
+        300: electorates.filter(e => e.year_level === 300).length,
+        400: electorates.filter(e => e.year_level === 400).length,
+      }
+    };
+  }, [electorates]);
+
+  const filteredElectorates = useMemo(() =>
+    electorates.filter(e =>
+      (e.student_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.name?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (!filterProgram || e.program === filterProgram)
+    ), [electorates, searchTerm, filterProgram]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -201,18 +230,21 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
 
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Voters (Electorates)</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Voters (Electorates)</h2>
+            <p className="text-sm text-gray-600 mt-1">{stats.total} total • {stats.voted} voted ({Math.round(stats.voted / stats.total * 100) || 0}%) • {stats.tokenized} tokenized</p>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={downloadTemplate}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
               title="Download Excel Template"
             >
               <Download className="h-5 w-5" />
               Template
             </button>
 
-            <label className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 cursor-pointer">
+            <label className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 cursor-pointer transition-colors">
               <Upload className="h-5 w-5" />
               {uploading ? 'Uploading...' : 'Bulk Upload'}
               <input
@@ -226,12 +258,77 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
 
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="h-5 w-5" />
               Add Voter
             </button>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-600 font-medium">Total Voters</p>
+            <p className="text-2xl font-bold text-blue-900">{stats.total}</p>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <p className="text-sm text-green-600 font-medium">Voted</p>
+            <p className="text-2xl font-bold text-green-900">{stats.voted}</p>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <p className="text-sm text-purple-600 font-medium">Tokens Generated</p>
+            <p className="text-2xl font-bold text-purple-900">{stats.tokenized}</p>
+          </div>
+          <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+            <p className="text-sm text-orange-600 font-medium">Pending</p>
+            <p className="text-2xl font-bold text-orange-900">{stats.total - stats.voted}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">By Program:</p>
+            <div className="flex flex-wrap gap-2">
+              {stats.programs.map(p => (
+                <div key={p.name} className="px-3 py-2 bg-indigo-50 text-indigo-700 text-xs rounded-full font-medium">
+                  {p.name}: {p.count} ({p.voted} voted)
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">By Year Level:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(stats.yieldByYear).map(([year, count]) => count > 0 && (
+                <div key={year} className="px-3 py-2 bg-teal-50 text-teal-700 text-xs rounded-full font-medium">
+                  Year {year}: {count}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by Student ID or Name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={filterProgram}
+            onChange={(e) => setFilterProgram(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Programs</option>
+            {stats.programs.map(p => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
         </div>
 
         {/* Upload Result Alert */}
@@ -348,7 +445,15 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {electorates.map((electorate) => (
+              {filteredElectorates.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="text-center py-12 text-gray-500">
+                    <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p>{searchTerm || filterProgram ? 'No voters match your filters' : 'No voters found'}</p>
+                  </td>
+                </tr>
+              )}
+              {filteredElectorates.map((electorate) => (
                 <tr key={electorate.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {electorate.student_id}

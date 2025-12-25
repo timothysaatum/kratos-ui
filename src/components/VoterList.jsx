@@ -85,8 +85,8 @@ export const VoterList = ({
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {electorate.voting_token ? (
-                    <span className="text-gray-500">Token Ready</span>
+                  {electorate.has_voted ? (
+                    <span className="text-gray-500">Voted</span>
                   ) : (
                     <button
                       onClick={() => onGenerateToken(electorate)}
@@ -95,8 +95,12 @@ export const VoterList = ({
                     >
                       <Key className="h-4 w-4" />
                       {generatingFor === electorate.id
-                        ? "Generating..."
-                        : "Generate Token"}
+                        ? electorate.voting_token
+                          ? "Regenerating..."
+                          : "Generating..."
+                        : electorate.voting_token
+                          ? "Regenerate Token"
+                          : "Generate Token"}
                     </button>
                   )}
                 </td>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Upload, X } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Edit2, Trash2, Upload, X, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
 import { useModal } from '../hooks/useModal';
@@ -9,6 +9,8 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
   const [editingId, setEditingId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterPortfolio, setFilterPortfolio] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     portfolio_id: '',
@@ -21,6 +23,22 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+
+  const stats = useMemo(() => ({
+    total: candidates.length,
+    active: candidates.filter(c => c.is_active).length,
+    byPortfolio: portfolios.map(p => ({
+      name: p.name,
+      count: candidates.filter(c => c.portfolio_id === p.id).length
+    })),
+  }), [candidates, portfolios]);
+
+  const filteredCandidates = useMemo(() =>
+    candidates.filter(c =>
+      (c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.bio && c.bio.toLowerCase().includes(searchTerm.toLowerCase()))) &&
+      (!filterPortfolio || c.portfolio_id === parseInt(filterPortfolio))
+    ), [candidates, searchTerm, filterPortfolio]);
 
   // Helper function to get full image URL
   const getImageUrl = (url) => {
@@ -83,7 +101,7 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
       }
       resetForm();
       onUpdate();
-      
+
       await alertModal.showAlert({
         title: 'Success!',
         message: `Candidate ${editingId ? 'updated' : 'created'} successfully`,
@@ -156,14 +174,47 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
 
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Candidates</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Candidates</h2>
+            <p className="text-sm text-gray-600 mt-1">{stats.total} total • {stats.active} active</p>
+          </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="h-5 w-5" />
             Add Candidate
           </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search candidates..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={filterPortfolio}
+            onChange={(e) => setFilterPortfolio(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Portfolios</option>
+            {portfolios.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <div className="flex flex-wrap gap-2">
+            {stats.byPortfolio.map(pf => pf.count > 0 && (
+              <div key={pf.name} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
+                {pf.name}: {pf.count}
+              </div>
+            ))}
+          </div>
         </div>
 
         {showForm && (
@@ -200,9 +251,9 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
               <div className="flex items-center gap-4">
                 {imagePreview && (
                   <div className="relative">
-                    <img 
-                      src={imagePreview} 
-                      alt="Preview" 
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
                       className="h-24 w-24 rounded-full object-cover border-2 border-gray-300"
                       onError={(e) => {
                         console.error('Image failed to load:', imagePreview);
@@ -288,16 +339,21 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
         )}
 
         <div className="space-y-4">
-          {candidates.map((candidate) => {
+          {filteredCandidates.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              <p>{searchTerm || filterPortfolio ? 'No candidates match your filters' : 'No candidates yet'}</p>
+            </div>
+          )}
+          {filteredCandidates.map((candidate) => {
             const imageUrl = getImageUrl(candidate.picture_url);
             return (
               <div key={candidate.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start">
                   <div className="flex gap-4 flex-1">
                     {imageUrl && (
-                      <img 
-                        src={imageUrl} 
-                        alt={candidate.name} 
+                      <img
+                        src={imageUrl}
+                        alt={candidate.name}
                         className="h-16 w-16 rounded-full object-cover border-2 border-gray-200"
                         onError={(e) => {
                           console.error('Failed to load image for candidate:', candidate.name, imageUrl);
