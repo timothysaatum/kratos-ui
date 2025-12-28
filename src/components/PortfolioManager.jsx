@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
+import { ToastContainer } from './Toast';
 import { useModal } from '../hooks/useModal';
+import { useToast } from '../hooks/useToast';
 
 export const PortfolioManager = ({ portfolios, onUpdate }) => {
   const [showForm, setShowForm] = useState(false);
@@ -18,6 +20,7 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+  const toast = useToast();
 
   const stats = useMemo(() => ({
     total: portfolios.length,
@@ -45,11 +48,7 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
       setFormData({ name: '', description: '', is_active: true, max_candidates: 1, voting_order: 0 });
       onUpdate();
 
-      await alertModal.showAlert({
-        title: 'Success!',
-        message: `Portfolio ${editingId ? 'updated' : 'created'} successfully`,
-        type: 'success'
-      });
+      toast.showSuccess(`Portfolio ${editingId ? 'updated' : 'created'} successfully`);
     } catch (err) {
       await alertModal.showAlert({
         title: 'Operation Failed',
@@ -83,11 +82,7 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
     try {
       await api.deletePortfolio(id);
       onUpdate();
-      await alertModal.showAlert({
-        title: 'Deleted!',
-        message: 'Portfolio deleted successfully',
-        type: 'success'
-      });
+      toast.showSuccess('Portfolio deleted successfully');
     } catch (err) {
       await alertModal.showAlert({
         title: 'Delete Failed',
@@ -99,6 +94,7 @@ export const PortfolioManager = ({ portfolios, onUpdate }) => {
 
   return (
     <>
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <ConfirmModal {...confirmModal} onConfirm={confirmModal.handleConfirm} onClose={confirmModal.handleClose} {...confirmModal.modalProps} />
       <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
 

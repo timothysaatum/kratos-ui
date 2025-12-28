@@ -5,55 +5,17 @@ import { api } from "../services/api";
 import { AlertModal } from "../components/Modal";
 import { useModal } from "../hooks/useModal";
 
-const PortfolioCard = ({ portfolio }) => {
-  const totalVotes =
-    portfolio.total_votes ||
-    (portfolio.candidates || []).reduce((sum, c) => sum + (c.votes || 0), 0);
+const SimplePortfolioCard = ({ portfolio }) => {
+  const totalVotes = portfolio.total_votes || 0;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
       <h3 className="text-lg font-semibold text-gray-900 mb-2">
-        {portfolio.name || portfolio.title}
+        {portfolio.portfolio_name || portfolio.name}
       </h3>
-      {portfolio.description && (
-        <p className="text-sm text-gray-600 mb-4">{portfolio.description}</p>
-      )}
-      <p className="text-sm font-medium text-gray-700 mb-4">
-        Total Votes: {totalVotes}
+      <p className="text-3xl font-bold text-green-600">
+        {totalVotes} votes
       </p>
-
-      <div className="space-y-4">
-        {(portfolio.candidates || []).length === 0 ? (
-          <p className="text-sm text-gray-500 italic">No candidates yet</p>
-        ) : (
-          (portfolio.candidates || []).map((candidate) => {
-            const percentage =
-              totalVotes > 0
-                ? ((candidate.votes / totalVotes) * 100).toFixed(2)
-                : 0;
-
-            return (
-              <div key={candidate.id} className="flex flex-col">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-900">
-                    {candidate.name}
-                    {candidate.party ? ` (${candidate.party})` : ""}
-                  </span>
-                  <span className="text-sm text-gray-600">
-                    {candidate.votes || 0} votes ({percentage}%)
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                  <div
-                    className="bg-green-600 h-full rounded-full transition-all duration-700"
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
     </div>
   );
 };
@@ -77,7 +39,7 @@ const PollingAgentLogin = ({ onLogin, alertModal }) => {
     setLoading(true);
     try {
       const data = await api.login(username, password);
-      
+
       // FIXED: Allow polling_agent AND admin roles
       if (data.role === "polling_agent" || data.role === "admin") {
         localStorage.setItem("admin_token", data.access_token);
@@ -165,7 +127,7 @@ const PollingAgentDashboard = ({ agent, onLogout }) => {
     try {
       const [statsData, resultsData] = await Promise.all([
         api.getStatistics().catch(() => null),
-        api.getResults().catch(() => ({ portfolios: [] })),
+        api.getResults().catch(() => []),
       ]);
       setStats(statsData);
       setResults(resultsData);
@@ -319,16 +281,14 @@ const PollingAgentDashboard = ({ agent, onLogout }) => {
               <RefreshCw className="h-12 w-12 text-green-600 animate-spin mx-auto" />
               <p className="mt-4 text-gray-600">Loading live results...</p>
             </div>
-          ) : !results ||
-            !results.portfolios ||
-            results.portfolios.length === 0 ? (
+          ) : !results || results.length === 0 ? (
             <div className="bg-white rounded-lg shadow p-12 text-center">
               <p className="text-gray-600">No results available yet</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {results.portfolios.map((portfolio) => (
-                <PortfolioCard key={portfolio.id} portfolio={portfolio} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {results.map((portfolio) => (
+                <SimplePortfolioCard key={portfolio.portfolio_id} portfolio={portfolio} />
               ))}
             </div>
           )}
@@ -417,6 +377,7 @@ export default function PollingAgentPortal() {
   const handleLogout = () => {
     localStorage.removeItem("admin_token");
     setAgent(null);
+    navigate('/');
   };
 
   if (loading) {

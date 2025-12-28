@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Upload, X, Search } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Plus, Edit2, Trash2, Upload, X, Search, Printer } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
+import { ToastContainer } from './Toast';
 import { useModal } from '../hooks/useModal';
+import { useToast } from '../hooks/useToast';
 
 export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
   const [showForm, setShowForm] = useState(false);
@@ -23,6 +25,82 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+  const toast = useToast();
+  const printRef = useRef();
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '', 'height=600,width=900');
+    const filteredData = candidates.filter(c =>
+      (c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.bio && c.bio.toLowerCase().includes(searchTerm.toLowerCase()))) &&
+      (!filterPortfolio || c.portfolio_id === parseInt(filterPortfolio))
+    );
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Candidates List - Print</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { text-align: center; color: #333; margin-bottom: 20px; }
+            .summary { margin-bottom: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background-color: #0066cc; color: white; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            tr:hover { background-color: #f0f0f0; }
+            .active-badge { background-color: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+            .inactive-badge { background-color: #ffebee; color: #c62828; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+            @media print {
+              body { margin: 10px; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Candidates List Report</h1>
+          <div class="summary">
+            <p><strong>Total Candidates:</strong> ${stats.total}</p>
+            <p><strong>Active:</strong> ${stats.active}</p>
+            ${stats.byPortfolio.map(pf => `<p><strong>${pf.name}:</strong> ${pf.count}</p>`).join('')}
+            <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Portfolio</th>
+                <th>Party</th>
+                <th>Bio</th>
+                <th>Manifesto</th>
+                <th>Display Order</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredData.map(c => `
+                <tr>
+                  <td>${c.name || '-'}</td>
+                  <td>${portfolios.find(p => p.id === c.portfolio_id)?.name || '-'}</td>
+                  <td>${c.party || '-'}</td>
+                  <td>${c.bio || '-'}</td>
+                  <td>${c.manifesto || '-'}</td>
+                  <td>${c.display_order || 0}</td>
+                  <td><span class="${c.is_active ? 'active-badge' : 'inactive-badge'}">${c.is_active ? 'Active' : 'Inactive'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.innerHTML = htmlContent;
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 250);
+    }
+  };
 
   const stats = useMemo(() => ({
     total: candidates.length,
@@ -102,11 +180,7 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
       resetForm();
       onUpdate();
 
-      await alertModal.showAlert({
-        title: 'Success!',
-        message: `Candidate ${editingId ? 'updated' : 'created'} successfully`,
-        type: 'success'
-      });
+      toast.showSuccess(`Candidate ${editingId ? 'updated' : 'created'} successfully`);
     } catch (err) {
       await alertModal.showAlert({
         title: 'Operation Failed',
@@ -153,11 +227,7 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
     try {
       await api.deleteCandidate(id);
       onUpdate();
-      await alertModal.showAlert({
-        title: 'Deleted!',
-        message: 'Candidate deleted successfully',
-        type: 'success'
-      });
+      toast.showSuccess('Candidate deleted successfully');
     } catch (err) {
       await alertModal.showAlert({
         title: 'Delete Failed',
@@ -169,6 +239,7 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
 
   return (
     <>
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <ConfirmModal {...confirmModal} onConfirm={confirmModal.handleConfirm} onClose={confirmModal.handleClose} {...confirmModal.modalProps} />
       <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
 
@@ -178,13 +249,23 @@ export const CandidateManager = ({ candidates, portfolios, onUpdate }) => {
             <h2 className="text-2xl font-bold text-gray-900">Candidates</h2>
             <p className="text-sm text-gray-600 mt-1">{stats.total} total • {stats.active} active</p>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-            Add Candidate
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              title="Print Candidates List"
+            >
+              <Printer className="h-5 w-5" />
+              Print
+            </button>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+              Add Candidate
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

@@ -3,7 +3,9 @@ import { RefreshCw, LogOut, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { AlertModal } from "../components/Modal";
+import { ToastContainer } from "../components/Toast";
 import { useModal } from "../hooks/useModal";
+import { useToast } from "../hooks/useToast";
 import { ECOfficialLogin } from "../components/ECOfficialLogin";
 import { TokenDisplay } from "../components/TokenDisplay";
 import { VoterList } from "../components/VoterList";
@@ -22,6 +24,25 @@ const ECOfficial = () => {
   const [filterStatus, setFilterStatus] = useState("all");
 
   const alertModal = useModal();
+  const toast = useToast();
+
+  const loadElectorates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.getElectorates(0, 1000);
+      setElectorates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load electorates:", err);
+      await alertModal.showAlert({
+        title: "Error",
+        message: "Failed to load voters: " + err.message,
+        type: "error",
+      });
+      setElectorates([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [alertModal]);
 
   const checkAuth = useCallback(async () => {
     const token = localStorage.getItem("admin_token");
@@ -64,11 +85,11 @@ const ECOfficial = () => {
     } finally {
       setLoading(false);
     }
-  }, [alertModal, navigate]);
+  }, [alertModal, navigate, loadElectorates]);
 
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
+  }, []);
 
   // Filter electorates based on search and status
   useEffect(() => {
@@ -97,24 +118,6 @@ const ECOfficial = () => {
 
     setFilteredElectorates(filtered);
   }, [electorates, searchTerm, filterStatus]);
-
-  const loadElectorates = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getElectorates(0, 1000);
-      setElectorates(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to load electorates:", err);
-      await alertModal.showAlert({
-        title: "Error",
-        message: "Failed to load voters: " + err.message,
-        type: "error",
-      });
-      setElectorates([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogin = async (data) => {
     console.log("Login attempt - User data:", data);
@@ -145,6 +148,7 @@ const ECOfficial = () => {
     setSelectedElectorate(null);
     setSearchTerm("");
     setFilterStatus("all");
+    navigate('/');
   };
 
   const handleGenerateToken = async (electorate) => {
@@ -162,11 +166,7 @@ const ECOfficial = () => {
       setGeneratedToken(result.token || result.voting_token);
       await loadElectorates();
 
-      await alertModal.showAlert({
-        title: "Token Generated",
-        message: "Voting token generated successfully!",
-        type: "success",
-      });
+      toast.showSuccess("Voting token generated successfully!");
     } catch (err) {
       console.error("Token generation failed:", err);
       await alertModal.showAlert({
@@ -213,6 +213,7 @@ const ECOfficial = () => {
   if (!isAuthenticated) {
     return (
       <>
+        <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
         <AlertModal
           {...alertModal}
           onClose={alertModal.handleClose}
@@ -227,6 +228,7 @@ const ECOfficial = () => {
   if (generatedToken && selectedElectorate) {
     return (
       <div className="min-h-screen bg-gray-50">
+        <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
         <AlertModal
           {...alertModal}
           onClose={alertModal.handleClose}
@@ -276,6 +278,7 @@ const ECOfficial = () => {
   // Main Dashboard
   return (
     <div className="min-h-screen bg-gray-50">
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <AlertModal
         {...alertModal}
         onClose={alertModal.handleClose}

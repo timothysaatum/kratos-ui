@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Send, Key, RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
+import { ToastContainer } from './Toast';
 import { useModal } from '../hooks/useModal';
+import { useToast } from '../hooks/useToast';
 
 export const TokenGenerator = ({ electorates, onUpdate }) => {
   const [generating, setGenerating] = useState(false);
@@ -17,6 +19,7 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+  const toast = useToast();
 
   const handleGenerateAll = async () => {
     const confirmed = await confirmModal.showConfirm({
@@ -26,20 +29,16 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
     });
 
     if (!confirmed) return;
-    
+
     setGenerating(true);
     setResult(null);
-    
+
     try {
       const data = await api.generateTokensForAll(options);
       setResult(data);
       onUpdate();
 
-      await alertModal.showAlert({
-        title: 'Generation Complete!',
-        message: `Successfully generated ${data.generated_tokens} tokens${data.notifications_sent ? ` and sent ${data.notifications_sent} notifications` : ''}`,
-        type: 'success'
-      });
+      toast.showSuccess(`Successfully generated ${data.generated_tokens} tokens${data.notifications_sent ? ` and sent ${data.notifications_sent} notifications` : ''}`);
     } catch (err) {
       await alertModal.showAlert({
         title: 'Token Generation Failed',
@@ -68,21 +67,17 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
     });
 
     if (!confirmed) return;
-    
+
     setGenerating(true);
     setResult(null);
-    
+
     try {
       const data = await api.generateTokensForElectorates(selectedVoters, options);
       setResult(data);
       setSelectedVoters([]);
       onUpdate();
 
-      await alertModal.showAlert({
-        title: 'Generation Complete!',
-        message: `Successfully generated ${data.generated_tokens} tokens${data.notifications_sent ? ` and sent ${data.notifications_sent} notifications` : ''}`,
-        type: 'success'
-      });
+      toast.showSuccess(`Successfully generated ${data.generated_tokens} tokens${data.notifications_sent ? ` and sent ${data.notifications_sent} notifications` : ''}`);
     } catch (err) {
       await alertModal.showAlert({
         title: 'Token Generation Failed',
@@ -102,16 +97,12 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
     });
 
     if (!confirmed) return;
-    
+
     try {
       await api.regenerateTokenForElectorate(electorateId, options);
       onUpdate();
-      
-      await alertModal.showAlert({
-        title: 'Token Regenerated!',
-        message: 'Token regenerated successfully',
-        type: 'success'
-      });
+
+      toast.showSuccess('Token regenerated successfully');
     } catch (err) {
       await alertModal.showAlert({
         title: 'Regeneration Failed',
@@ -122,8 +113,8 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
   };
 
   const toggleVoterSelection = (voterId) => {
-    setSelectedVoters(prev => 
-      prev.includes(voterId) 
+    setSelectedVoters(prev =>
+      prev.includes(voterId)
         ? prev.filter(id => id !== voterId)
         : [...prev, voterId]
     );
@@ -131,6 +122,7 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
 
   return (
     <>
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <ConfirmModal {...confirmModal} onConfirm={confirmModal.handleConfirm} onClose={confirmModal.handleClose} {...confirmModal.modalProps} />
       <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
 
@@ -140,7 +132,7 @@ export const TokenGenerator = ({ electorates, onUpdate }) => {
         {/* Options */}
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">Generation Options</h3>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

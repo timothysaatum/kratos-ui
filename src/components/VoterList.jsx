@@ -1,4 +1,3 @@
-// src/components/VoterList.jsx
 import { Key } from "lucide-react";
 
 export const VoterList = ({

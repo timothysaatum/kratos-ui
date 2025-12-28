@@ -3,7 +3,9 @@ import { LogOut, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { AlertModal } from "../components/Modal";
+import { ToastContainer } from "../components/Toast";
 import { useModal } from "../hooks/useModal";
+import { useToast } from "../hooks/useToast";
 import { Login } from "../components/Login";
 import { Dashboard } from "../components/Dashboard";
 import { PortfolioManager } from "../components/PortfolioManager";
@@ -28,55 +30,9 @@ const Admin = () => {
   const [results, setResults] = useState([]);
 
   const alertModal = useModal();
+  const toast = useToast();
 
-  const checkAuth = useCallback(async () => {
-    const token = localStorage.getItem("admin_token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const data = await api.verify();
-
-      console.log("Admin page - User data:", data);
-
-      // Only allow admin role - redirect others
-      if (data.role === "admin") {
-        setAdminData(data);
-        setIsAuthenticated(true);
-        await loadData();
-      } else {
-        // Redirect to appropriate page based on role
-        const correctRoute = api.getRoleBasedRoute(data.role);
-        localStorage.removeItem("admin_token");
-        await alertModal.showAlert({
-          title: "Access Denied",
-          message: `This page is for admins only. Redirecting to ${data.role} portal...`,
-          type: "error",
-        });
-        setTimeout(() => navigate(correctRoute), 2000);
-        return;
-      }
-    } catch (err) {
-      console.error("Auth verification failed:", err);
-      localStorage.removeItem("admin_token");
-      setIsAuthenticated(false);
-      await alertModal.showAlert({
-        title: "Access Denied",
-        message: err.message || "You don't have permission to access the admin panel",
-        type: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [alertModal, navigate]);
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [
         statsData,
@@ -105,7 +61,50 @@ const Admin = () => {
         type: "error",
       });
     }
-  };
+  }, [alertModal]);
+
+  const checkAuth = useCallback(async () => {
+    const token = localStorage.getItem("admin_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await api.verify();
+
+      console.log("Admin page - User data:", data);
+
+      // Only allow admin role - redirect others
+      if (data.role === "admin") {
+        setAdminData(data);
+        setIsAuthenticated(true);
+        await loadData();
+      } else {
+        // Redirect to appropriate page based on role
+        const correctRoute = api.getRoleBasedRoute(data.role);
+        localStorage.removeItem("admin_token");
+        toast.showError(`This page is for admins only. Redirecting to ${data.role} portal...`);
+        setTimeout(() => navigate(correctRoute), 2000);
+        return;
+      }
+    } catch (err) {
+      console.error("Auth verification failed:", err);
+      localStorage.removeItem("admin_token");
+      setIsAuthenticated(false);
+      await alertModal.showAlert({
+        title: "Access Denied",
+        message: err.message || "You don't have permission to access the admin panel",
+        type: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [alertModal, navigate, toast, loadData]);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   const handleLogin = async (data) => {
     console.log("Login response:", data);
@@ -117,11 +116,7 @@ const Admin = () => {
       setLoading(true);
       try {
         await loadData();
-        await alertModal.showAlert({
-          title: "Success!",
-          message: "Login successful!",
-          type: "success",
-        });
+        toast.showSuccess("Login successful!");
       } catch (err) {
         console.error("Post-login data load failed:", err);
       } finally {
@@ -130,11 +125,7 @@ const Admin = () => {
     } else {
       // Redirect to correct portal
       const correctRoute = api.getRoleBasedRoute(data.role);
-      await alertModal.showAlert({
-        title: "Wrong Portal",
-        message: `You are logged in as ${data.role}. Redirecting to your portal...`,
-        type: "info",
-      });
+      toast.showInfo(`You are logged in as ${data.role}. Redirecting to your portal...`);
       setTimeout(() => navigate(correctRoute), 2000);
       localStorage.removeItem("admin_token");
     }
@@ -150,6 +141,7 @@ const Admin = () => {
     setCandidates([]);
     setElectorates([]);
     setResults([]);
+    navigate('/');
   };
 
   const refreshData = async () => {
@@ -186,6 +178,7 @@ const Admin = () => {
   if (!isAuthenticated) {
     return (
       <>
+        <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
         <AlertModal
           {...alertModal}
           onClose={alertModal.handleClose}
@@ -198,6 +191,7 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <AlertModal
         {...alertModal}
         onClose={alertModal.handleClose}
@@ -252,11 +246,10 @@ const Admin = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors whitespace-nowrap ${
-                  activeTab === tab
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors whitespace-nowrap ${activeTab === tab
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
               >
                 {tab}
               </button>

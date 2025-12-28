@@ -1,8 +1,91 @@
-import { Trophy, TrendingUp, Target, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Trophy, TrendingUp, Printer } from 'lucide-react';
+import { useMemo, useState, useRef } from 'react';
 
 export const ResultsView = ({ results }) => {
   const [selectedPortfolio, setSelectedPortfolio] = useState(null);
+  const printRef = useRef();
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '', 'height=600,width=900');
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Election Results - Print</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { text-align: center; color: #333; margin-bottom: 20px; }
+            .summary { margin-bottom: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+            .portfolio-section { page-break-inside: avoid; margin-bottom: 30px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+            .portfolio-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px; }
+            .winner-section { background-color: #fff8e1; border: 2px solid #ffd600; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
+            .winner-badge { color: #f57f17; font-weight: bold; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background-color: #0066cc; color: white; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .vote-percentage { font-weight: bold; color: #0066cc; }
+            @media print {
+              body { margin: 10px; }
+              .portfolio-section { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Election Results Report</h1>
+          <div class="summary">
+            <p><strong>Total Votes:</strong> ${stats.totalVotes}</p>
+            <p><strong>Total Portfolios:</strong> ${stats.totalPortfolios}</p>
+            <p><strong>Winners Determined:</strong> ${stats.winners}</p>
+            <p><strong>Average Votes per Portfolio:</strong> ${stats.avgVotesPerPortfolio}</p>
+            <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          ${results.map((result, idx) => `
+            <div class="portfolio-section">
+              <div class="portfolio-title">${idx + 1}. ${result.portfolio_name}</div>
+              <p><strong>Total Votes:</strong> ${result.total_votes}</p>
+              
+              ${result.winner ? `
+                <div class="winner-section">
+                  <div class="winner-badge">🏆 WINNER</div>
+                  <p><strong>${result.winner.name}</strong></p>
+                  <p>Votes: ${result.winner.vote_count} (${result.total_votes > 0 ? ((result.winner.vote_count / result.total_votes) * 100).toFixed(1) : 0}%)</p>
+                </div>
+              ` : ''}
+              
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Candidate Name</th>
+                    <th>Votes</th>
+                    <th>Percentage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${result.candidates.map((c, i) => `
+                    <tr>
+                      <td>#${i + 1}</td>
+                      <td>${c.name}</td>
+                      <td>${c.vote_count}</td>
+                      <td class="vote-percentage">${result.total_votes > 0 ? ((c.vote_count / result.total_votes) * 100).toFixed(1) : 0}%</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+        </body>
+      </html>
+    `;
+
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.innerHTML = htmlContent;
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 250);
+    }
+  };
 
   // Helper function to get full image URL
   const getImageUrl = (url) => {
@@ -26,12 +109,22 @@ export const ResultsView = ({ results }) => {
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Trophy className="h-8 w-8 text-yellow-500" />
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Election Results</h2>
-          <p className="text-sm text-gray-600 mt-1">{stats.totalVotes} votes • {stats.totalPortfolios} portfolios • {stats.winners} winners</p>
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <Trophy className="h-8 w-8 text-yellow-500" />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Election Results</h2>
+            <p className="text-sm text-gray-600 mt-1">{stats.totalVotes} votes • {stats.totalPortfolios} portfolios • {stats.winners} winners</p>
+          </div>
         </div>
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          title="Print Results"
+        >
+          <Printer className="h-5 w-5" />
+          Print
+        </button>
       </div>
 
       {results.length > 0 && (

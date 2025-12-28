@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Upload, Download, FileSpreadsheet, Search } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Plus, Edit2, Trash2, Upload, Download, FileSpreadsheet, Search, Printer } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfirmModal, AlertModal } from './Modal';
+import { ToastContainer } from './Toast';
 import { useModal } from '../hooks/useModal';
+import { useToast } from '../hooks/useToast';
 
 export const ElectorateManager = ({ electorates, onUpdate }) => {
   const [showForm, setShowForm] = useState(false);
@@ -21,6 +23,90 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
 
   const confirmModal = useModal();
   const alertModal = useModal();
+  const toast = useToast();
+  const printRef = useRef();
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '', 'height=600,width=900');
+    const filteredData = electorates.filter(e =>
+      (e.student_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.name?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (!filterProgram || e.program === filterProgram)
+    );
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Voters List - Print</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { text-align: center; color: #333; margin-bottom: 20px; }
+            .summary { margin-bottom: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background-color: #0066cc; color: white; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            tr:hover { background-color: #f0f0f0; }
+            .voted { color: green; font-weight: bold; }
+            .pending { color: #ff9800; font-weight: bold; }
+            .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+            .voted-badge { background-color: #e8f5e9; color: #2e7d32; }
+            .pending-badge { background-color: #fff3e0; color: #e65100; }
+            .token-badge { background-color: #e3f2fd; color: #1565c0; }
+            @media print {
+              body { margin: 10px; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Voters List Report</h1>
+          <div class="summary">
+            <p><strong>Total Voters:</strong> ${stats.total}</p>
+            <p><strong>Voted:</strong> ${stats.voted}</p>
+            <p><strong>Tokens Generated:</strong> ${stats.tokenized}</p>
+            <p><strong>Pending:</strong> ${stats.total - stats.voted}</p>
+            <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Program</th>
+                <th>Year Level</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Token</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredData.map(e => `
+                <tr>
+                  <td>${e.student_id || '-'}</td>
+                  <td>${e.name || '-'}</td>
+                  <td>${e.program || '-'}</td>
+                  <td>${e.year_level || '-'}</td>
+                  <td>${e.email || '-'}</td>
+                  <td>${e.phone_number || '-'}</td>
+                  <td><span class="status-badge ${e.has_voted ? 'voted-badge' : 'pending-badge'}">${e.has_voted ? 'Voted' : 'Pending'}</span></td>
+                  <td>${e.voting_token ? '<span class="status-badge token-badge">Generated</span>' : '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.innerHTML = htmlContent;
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 250);
+    }
+  };
 
   const stats = useMemo(() => {
     const programs = [...new Set(electorates.map(e => e.program).filter(Boolean))];
@@ -74,11 +160,7 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
       resetForm();
       onUpdate();
 
-      await alertModal.showAlert({
-        title: 'Success!',
-        message: `Voter ${editingId ? 'updated' : 'created'} successfully`,
-        type: 'success'
-      });
+      toast.showSuccess(`Voter ${editingId ? 'updated' : 'created'} successfully`);
     } catch (err) {
       await alertModal.showAlert({
         title: 'Operation Failed',
@@ -124,11 +206,7 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
     try {
       await api.deleteElectorate(id);
       onUpdate();
-      await alertModal.showAlert({
-        title: 'Deleted!',
-        message: 'Voter deleted successfully',
-        type: 'success'
-      });
+      toast.showSuccess('Voter deleted successfully');
     } catch (err) {
       await alertModal.showAlert({
         title: 'Delete Failed',
@@ -179,11 +257,7 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
       // Clear file input
       e.target.value = '';
 
-      await alertModal.showAlert({
-        title: 'Upload Successful!',
-        message: `Successfully uploaded ${result.length} voters!`,
-        type: 'success'
-      });
+      toast.showSuccess(`Successfully uploaded ${result.length} voters!`);
     } catch (err) {
       setUploadResult({
         success: false,
@@ -225,6 +299,7 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
 
   return (
     <>
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <ConfirmModal {...confirmModal} onConfirm={confirmModal.handleConfirm} onClose={confirmModal.handleClose} {...confirmModal.modalProps} />
       <AlertModal {...alertModal} onClose={alertModal.handleClose} {...alertModal.modalProps} />
 
@@ -242,6 +317,15 @@ export const ElectorateManager = ({ electorates, onUpdate }) => {
             >
               <Download className="h-5 w-5" />
               Template
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              title="Print Voters List"
+            >
+              <Printer className="h-5 w-5" />
+              Print
             </button>
 
             <label className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 cursor-pointer transition-colors">
