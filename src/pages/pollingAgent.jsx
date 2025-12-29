@@ -3,7 +3,9 @@ import { BarChart3, Users, TrendingUp, RefreshCw, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { AlertModal } from "../components/Modal";
+import { ToastContainer } from "../components/Toast";
 import { useModal } from "../hooks/useModal";
+import { useToast } from "../hooks/useToast";
 
 const SimplePortfolioCard = ({ portfolio }) => {
   const totalVotes = portfolio.total_votes || 0;
@@ -122,6 +124,7 @@ const PollingAgentDashboard = ({ agent, onLogout }) => {
 
   const alertModalRef = useRef(useModal());
   const alertModal = alertModalRef.current;
+  const toast = useToast();
 
   const loadResults = useCallback(async () => {
     try {
@@ -134,17 +137,10 @@ const PollingAgentDashboard = ({ agent, onLogout }) => {
       setLastUpdate(new Date());
     } catch (err) {
       console.error("Failed to load results:", err);
-      if (!autoRefresh) {
-        alertModal.showAlert({
-          title: "Error",
-          message: "Failed to load results: " + err.message,
-          type: "error",
-        });
-      }
     } finally {
       setLoading(false);
     }
-  }, [autoRefresh, alertModal]);
+  }, []);
 
   useEffect(() => {
     loadResults();
@@ -169,6 +165,7 @@ const PollingAgentDashboard = ({ agent, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <AlertModal
         {...alertModal}
         onClose={alertModal.handleClose}

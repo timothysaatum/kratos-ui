@@ -148,17 +148,9 @@ const Admin = () => {
     setRefreshing(true);
     try {
       await loadData();
-      await alertModal.showAlert({
-        title: "Success!",
-        message: "Data refreshed successfully!",
-        type: "success",
-      });
+      toast.showSuccess("Data refreshed successfully!");
     } catch (err) {
-      await alertModal.showAlert({
-        title: "Error",
-        message: "Failed to refresh data: " + err.message,
-        type: "error",
-      });
+      toast.showError("Failed to refresh data: " + err.message);
     } finally {
       setRefreshing(false);
     }

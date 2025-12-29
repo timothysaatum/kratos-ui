@@ -33,16 +33,12 @@ const ECOfficial = () => {
       setElectorates(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to load electorates:", err);
-      await alertModal.showAlert({
-        title: "Error",
-        message: "Failed to load voters: " + err.message,
-        type: "error",
-      });
+      toast.showError("Failed to load voters: " + err.message);
       setElectorates([]);
     } finally {
       setLoading(false);
     }
-  }, [alertModal]);
+  }, [toast]);
 
   const checkAuth = useCallback(async () => {
     const token = localStorage.getItem("admin_token");
