@@ -80,8 +80,8 @@ export const ResultsView = ({ results }) => {
     `;
 
     if (printWindow) {
-      printWindow.document.open();
-      printWindow.document.innerHTML = htmlContent;
+      // eslint-disable-next-line no-restricted-globals
+      printWindow.document.write(htmlContent);
       printWindow.document.close();
       setTimeout(() => printWindow.print(), 250);
     }
